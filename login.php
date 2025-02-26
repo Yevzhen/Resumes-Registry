@@ -4,73 +4,67 @@ require_once "pdo.php";
 session_start();
 
 // If the user requested cancel go to index.php
-if ( isset($_POST['cancel']) ) {
-    $_SESSION ['cancel'] = $_POST['cancel'];
+if (isset($_POST['cancel'])) {
     header('Location: index.php');
-    return;
+    exit();
 }
-
-$salt = 'XyZzy12*_';
-// $stored_hash = '1a52e17fa899cf40fb04cfc42e6352f1';  // Pw is php123
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['email']) && isset($_POST['pass'])) {
+        
+        $email = filter_var(trim($_POST['email']), FILTER_SANITIZE_EMAIL);
+        $password = trim($_POST['pass']);
 
-if ( isset($_POST['email']) && isset($_POST['pass'])  ) {
-	
-	if (empty(trim($_POST['email'])) || empty(trim($_POST['pass']))) {
-		$_SESSION ['error'] = "Email and password are required";
-	}
-	else {
-		if (strpos($_POST['email'], '@') === false) {
-			$_SESSION ['error'] = "Email must contain an '@' character.";
-		}	
-		else {
-			$check = hash('md5', $salt.$_POST['pass']);
-			$stmt = $pdo->prepare('SELECT user_id, name FROM users WHERE email = :em AND password = :pw');
-			$stmt->execute(array( ':em' => $_POST['email'], ':pw' => $check));
-			$row = $stmt->fetch(PDO::FETCH_ASSOC);
-			if ( $row !== false ) {
-				$_SESSION['name'] = $row['name'];
-				$_SESSION['user_id'] = $row['user_id'];
-				header("Location: index.php");
-				return;
-			} else {
-				$_SESSION ['error'] = "Incorrect email or password";
-				header("Location: login.php");
-				return;
-			}
-		}
-	}
-}
+        if (empty($email) || empty($password)) {
+            $_SESSION['error'] = "Email and password are required.";
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $_SESSION['error'] = "Invalid email format.";
+        } else {
+            $stmt = $pdo->prepare('SELECT user_id, name, password FROM users WHERE email = :em');
+            $stmt->execute([':em' => $email]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($row && password_verify($password, $row['password'])) {
+                session_regenerate_id(true);  // Prevent session fixation
+                $_SESSION['name'] = $row['name'];
+                $_SESSION['user_id'] = $row['user_id'];
+                header("Location: index.php");
+                exit();
+            } else {
+                $_SESSION['error'] = "Invalid credentials. Please try again.";
+                header("Location: login.php");
+                exit();
+            }
+        }
+    }
 }
 ?>
 
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<title>Yevheniia Tychynska's Resumes Registry</title>
-<script src="validation.js"></script>
+    <meta charset="UTF-8">
+    <title>Login - Secure App</title>
+    <script src="validation.js"></script>
 </head>
 <body>
-
-<div class="container">
-<p>Please Login</p>
-<?php
-if (isset($_SESSION['error'])) {
-    echo '<p style="color:red;">' . htmlentities($_SESSION['error']) . "</p>\n";
-    unset($_SESSION['error']); // Clear error after displaying
-}
-?>
-<form method="post">
-<p>Email:
-<input type="text" name="email" id="id_email"></p>
-<p>Password:
-<input type="password" name="pass" id="id_1723"></p>
-<p><input type="submit" onclick="return doValidate();" value="Log In"/>
-
-<input type="submit" name="cancel" value="Cancel"/></p>
-</form>
-</div>
+    <div class="container">
+        <p>Please Login</p>
+        <?php
+        if (isset($_SESSION['error'])) {
+            echo '<p style="color:red;">' . htmlentities($_SESSION['error']) . "</p>\n";
+            unset($_SESSION['error']);
+        }
+        ?>
+        <form method="post">
+            <p>Email: <input type="email" name="email" required></p>
+            <p>Password: <input type="password" name="pass" required></p>
+            <p>
+                <input type="submit" value="Log In">
+                <input type="submit" name="cancel" value="Cancel">
+            </p>
+        </form>
+    </div>
 </body>
 </html>
 
